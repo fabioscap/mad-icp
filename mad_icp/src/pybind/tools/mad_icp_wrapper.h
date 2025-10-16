@@ -39,16 +39,17 @@ public:
 
   void setQueryCloud(ContainerType query, const double b_max, const double b_min) {
     ContainerType* query_ptr = &query;
-    query_tree_.reset(
-      new MADtree(query_ptr, query_ptr->begin(), query_ptr->end(), b_max, b_min, 0, max_parallel_levels_, nullptr, nullptr));
-    query_tree_->getLeafs(std::back_insert_iterator<LeafList>(query_leaves_));
+    query_tree_.reset(new MADtreeV);
+    auto root = query_tree_->build(query_ptr, query_ptr->begin(), query_ptr->end(), b_max, b_min, max_parallel_levels_);
+    root.get_leaves(std::back_insert_iterator<LeafList>(query_leaves_));
   }
 
   void setReferenceCloud(ContainerType reference, const double b_max, const double b_min) {
     ContainerType* reference_ptr = &reference;
     ref_b_max_                   = b_max;
-    ref_tree_.reset(new MADtree(
-      reference_ptr, reference_ptr->begin(), reference_ptr->end(), ref_b_max_, b_min, 0, max_parallel_levels_, nullptr, nullptr));
+    ref_tree_.reset(new MADtreeV());
+    auto root =
+      ref_tree_->build(reference_ptr, reference_ptr->begin(), reference_ptr->end(), ref_b_max_, b_min, max_parallel_levels_);
   }
 
   inline Eigen::Matrix4d compute(const Eigen::Matrix4d& T,
@@ -56,7 +57,7 @@ public:
                                  const double rho_ker,
                                  double b_ratio,
                                  const bool print_stats) {
-    mad_icp_.reset(new MADicp(ref_b_max_, rho_ker, b_ratio, 1));
+    mad_icp_.reset(new MADicpV(ref_b_max_, rho_ker, b_ratio, 1));
     mad_icp_->setMoving(query_leaves_);
     // make initial guess in right format
     Eigen::Isometry3d dX = Eigen::Isometry3d::Identity();
@@ -71,12 +72,13 @@ public:
     // icp loop
     for (size_t icp_iteration = 0; icp_iteration < max_icp_iterations; ++icp_iteration) {
       if (icp_iteration == max_icp_iterations - 1) {
-        for (MADtree* l : query_leaves_) {
-          l->matched_ = false;
+        for (MADnode* l : query_leaves_) {
+          l->matched = false;
         }
       }
       mad_icp_->resetAdders();
-      mad_icp_->update(ref_tree_.get());
+      auto root = MADtreeV::MADNodeHandle{0, &ref_tree_->storage};
+      mad_icp_->update(root);
       mad_icp_->updateState();
     }
 
@@ -86,8 +88,8 @@ public:
 
     if (print_stats) {
       int matched_leaves = 0;
-      for (MADtree* l : query_leaves_) {
-        if (l->matched_) {
+      for (MADnode* l : query_leaves_) {
+        if (l->matched) {
           matched_leaves++;
         }
       }
@@ -102,9 +104,9 @@ public:
   }
 
 protected:
-  std::unique_ptr<MADicp> mad_icp_     = nullptr;
-  std::unique_ptr<MADtree> ref_tree_   = nullptr;
-  std::unique_ptr<MADtree> query_tree_ = nullptr;
+  std::unique_ptr<MADicpV> mad_icp_     = nullptr;
+  std::unique_ptr<MADtreeV> ref_tree_   = nullptr;
+  std::unique_ptr<MADtreeV> query_tree_ = nullptr;
   LeafList query_leaves_;
   double ref_b_max_;
   int max_parallel_levels_;

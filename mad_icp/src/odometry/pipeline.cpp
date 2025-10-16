@@ -30,6 +30,7 @@
 
 #include <filesystem>
 #include <tools/constants.h>
+#include <vector>
 
 Pipeline::Pipeline(double sensor_hz,
                    bool deskew,
@@ -139,11 +140,12 @@ void Pipeline::compute(const double& curr_stamp, ContainerType curr_cloud_mem) {
   if (deskew_ && trajectory_.size() > 1)
     deskew(curr_cloud, trajectory_[trajectory_.size() - 2], trajectory_[trajectory_.size() - 1]);
 
-  current_tree_ =
-    new MADtree(curr_cloud, curr_cloud->begin(), curr_cloud->end(), b_max_, b_min_, 0, max_parallel_levels_, nullptr, nullptr);
+  current_tree_ = new MADtreeV;
+
+  auto root = current_tree_->build(curr_cloud, curr_cloud->begin(), curr_cloud->end(), b_max_, b_min_, max_parallel_levels_);
 
   current_leaves_.clear();
-  current_tree_->getLeafs(std::back_insert_iterator<LeafList>(current_leaves_));
+  root.get_leaves(std::back_insert_iterator<LeafList>(current_leaves_));
 
   Vector6d dx = current_velocity_ * 1. / sensor_hz_;
   Eigen::Isometry3d dX;
@@ -172,16 +174,17 @@ void Pipeline::compute(const double& curr_stamp, ContainerType curr_cloud_mem) {
 
     gettimeofday(&icp_start, nullptr);
     if (icp_iteration == MAX_ICP_ITS - 1) {
-      for (MADtree* l : current_leaves_) {
-        l->matched_ = false;
+      for (MADnode* l : current_leaves_) {
+        l->matched = false;
       }
     }
 
     icp_.resetAdders();
 
 #pragma omp parallel for
-    for (const Frame* frame : keyframes_) {
-      icp_.update(frame->tree_);
+    for (Frame* frame : keyframes_) {
+      auto root = MADtreeV::MADNodeHandle{0, &frame->tree_->storage};
+      icp_.update(root);
     }
 
 #pragma omp barrier
@@ -206,8 +209,8 @@ void Pipeline::compute(const double& curr_stamp, ContainerType curr_cloud_mem) {
   frame_to_map_ = icp_.X_;
 
   int matched_leaves = 0;
-  for (MADtree* l : current_leaves_) {
-    if (l->matched_) {
+  for (MADnode* l : current_leaves_) {
+    if (l->matched) {
       matched_leaves++;
     }
   }
@@ -232,7 +235,7 @@ void Pipeline::compute(const double& curr_stamp, ContainerType curr_cloud_mem) {
   current_frame->frame_to_map_ = frame_to_map_;
   current_frame->stamp_        = curr_stamp;
   current_frame->weight_       = icp_.H_adder_.inverse().determinant();
-  current_tree_->applyTransform(frame_to_map_.linear(), frame_to_map_.translation());
+  root.apply_transform(frame_to_map_.linear(), frame_to_map_.translation());
   current_frame->tree_   = current_tree_;
   current_frame->leaves_ = current_leaves_;
 
@@ -280,10 +283,12 @@ void Pipeline::initialize(const double& curr_stamp, const ContainerTypePtr curr_
   current_frame->frame_        = seq_;
   current_frame->frame_to_map_ = frame_to_map_;
   current_frame->stamp_        = curr_stamp;
-  current_frame->tree_ =
-    new MADtree(curr_cloud, curr_cloud->begin(), curr_cloud->end(), b_max_, b_min_, 0, max_parallel_levels_, nullptr, nullptr);
 
-  current_frame->tree_->getLeafs(std::back_insert_iterator<LeafList>(current_frame->leaves_));
+  current_frame->tree_ = new MADtreeV();
+  auto root =
+    current_frame->tree_->build(curr_cloud, curr_cloud->begin(), curr_cloud->end(), b_max_, b_min_, max_parallel_levels_);
+
+  root.get_leaves(std::back_insert_iterator<LeafList>(current_frame->leaves_));
 
   keyframes_.push_back(current_frame);
 
@@ -301,8 +306,8 @@ const bool Pipeline::isMapUpdated() {
 const ContainerType Pipeline::currentLeaves() {
   ContainerType leaves;
   std::back_insert_iterator<ContainerType> leaves_it(leaves);
-  for (MADtree* leaf : current_leaves_) {
-    ++leaves_it = leaf->mean_;
+  for (MADnode* leaf : current_leaves_) {
+    ++leaves_it = leaf->mean;
   }
   return leaves;
 }
@@ -311,8 +316,8 @@ const ContainerType Pipeline::modelLeaves() {
   ContainerType leaves;
   std::back_insert_iterator<ContainerType> leaves_it(leaves);
   for (auto frame : keyframes_) {
-    for (MADtree* leaf : frame->leaves_) {
-      ++leaves_it = leaf->mean_;
+    for (MADnode* leaf : frame->leaves_) {
+      ++leaves_it = leaf->mean;
     }
   }
   return leaves;

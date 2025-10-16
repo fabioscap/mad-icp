@@ -28,7 +28,7 @@
 
 #include "mad_icp.h"
 
-MADicp::MADicp(double min_ball, double rho_ker, double b_ratio, int num_threads) :
+MADicpV::MADicpV(double min_ball, double rho_ker, double b_ratio, int num_threads) :
   min_ball_(min_ball), rho_ker_(sqrt(rho_ker)), b_ratio_(b_ratio), num_threads_(num_threads) {
   X_.setIdentity();
   H_adder_.setZero();
@@ -40,7 +40,7 @@ MADicp::MADicp(double min_ball, double rho_ker, double b_ratio, int num_threads)
   chi_adders_ = std::vector<double>(num_threads);
 }
 
-void MADicp::resetAdders() {
+void MADicpV::resetAdders() {
   H_adder_.setZero();
   b_adder_.setZero();
   chi_adder_ = 0;
@@ -52,22 +52,22 @@ void MADicp::resetAdders() {
   }
 }
 
-void MADicp::setMoving(const LeafList& moving_leaves) {
+void MADicpV::setMoving(const LeafList& moving_leaves) {
   moving_leaves_ = moving_leaves;
 }
 
-void MADicp::init(const Eigen::Isometry3d& moving_in_fixed) {
+void MADicpV::init(const Eigen::Isometry3d& moving_in_fixed) {
   X_ = moving_in_fixed;
 }
 
-void MADicp::errorAndJacobian(double& e,
-                              JacobianMatrixType& J,
-                              const MADtree& fixed,
-                              const MADtree& moving,
-                              const Eigen::Vector3d& moving_transformed) const {
-  const auto& fixed_point  = fixed.mean_;
-  const auto& fixed_normal = fixed.eigenvectors_.col(0);
-  const auto& moving_point = moving.mean_;
+void MADicpV::errorAndJacobian(double& e,
+                               JacobianMatrixType& J,
+                               const MADnode& fixed,
+                               const MADnode& moving,
+                               const Eigen::Vector3d& moving_transformed) const {
+  const auto& fixed_point  = fixed.mean;
+  const auto& fixed_normal = fixed.eigenvectors.col(0);
+  const auto& moving_point = moving.mean;
   const Eigen::Matrix3d& R = X_.linear();
 
   e                   = (moving_transformed - fixed_point).dot(fixed_normal);
@@ -75,23 +75,23 @@ void MADicp::errorAndJacobian(double& e,
   J.block<1, 3>(0, 3) = -J.block<1, 3>(0, 0) * skew(moving_point);
 }
 
-void MADicp::update(const MADtree* fixed_tree) {
+void MADicpV::update(const MADNodeHandle& fixed_tree) {
   const int thread_id = omp_get_thread_num();
 
   for (auto& moving : moving_leaves_) {
-    const Eigen::Vector3d ml = X_ * moving->mean_;
-    const auto f             = fixed_tree->bestMatchingLeafFast(ml);
+    const Eigen::Vector3d ml = X_ * moving->mean;
+    const auto f             = fixed_tree.best_matching_leaf_fast(ml);
 
-    const double src_ball = min_ball_ + b_ratio_ * moving->mean_.norm();
-    if ((ml - f->mean_).norm() > src_ball)
+    const double src_ball = min_ball_ + b_ratio_ * moving->mean.norm();
+    if ((ml - f.mean).norm() > src_ball)
       continue;
 
-    moving->matched_ = true;
+    moving->matched = true;
 
     JacobianMatrixType J;
     double e;
 
-    errorAndJacobian(e, J, *f, *moving, ml);
+    errorAndJacobian(e, J, f, *moving, ml);
 
     double scale     = 1.;
     const double chi = abs(e);
@@ -99,7 +99,7 @@ void MADicp::update(const MADtree* fixed_tree) {
     if (chi > rho_ker_) {
       scale = rho_ker_ / chi;
     }
-    const double w = 1. - f->bbox_(0) / min_ball_;
+    const double w = 1. - f.bbox(0) / min_ball_;
     scale *= w * w;
 
     H_adders_[thread_id] += scale * J.transpose() * J;
@@ -108,7 +108,7 @@ void MADicp::update(const MADtree* fixed_tree) {
   }
 }
 
-void MADicp::updateState() {
+void MADicpV::updateState() {
   for (size_t i = 0; i < num_threads_; ++i) {
     H_adder_ += H_adders_[i];
     b_adder_ += b_adders_[i];

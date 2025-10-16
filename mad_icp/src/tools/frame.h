@@ -45,7 +45,7 @@ struct Frame {
   };
 
   Eigen::Isometry3d frame_to_map_;
-  MADtree* tree_;
+  MADtreeV* tree_;
   ContainerType* cloud_;
   LeafList leaves_;
   double stamp_;

@@ -1,31 +1,3 @@
-// Copyright 2024 R(obots) V(ision) and P(erception) group
-//
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
-//
-// 1. Redistributions of source code must retain the above copyright notice,
-//    this list of conditions and the following disclaimer.
-//
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
-//
-// 3. Neither the name of the copyright holder nor the names of its contributors
-//    may be used to endorse or promote products derived from this software
-//    without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-// POSSIBILITY OF SUCH DAMAGE.
-
 #pragma once
 
 #include "utils.h"
@@ -33,74 +5,175 @@
 #include <Eigen/Core>
 #include <atomic>
 #include <iostream>
-#include <list>
 #include <memory>
+#include <vector>
 
-class MADtree;
+namespace flib {
+  using IdxType = size_t;
 
-// some using
+  // wrap nodes storing also the address of the storage. We don't want this
+  // information in the nodes because if we serialize the tree then all of the
+  // pointers become invalid
+
+  template <typename T, size_t NS = 1024>
+  struct BTreeVector {
+    static constexpr IdxType no_idx = static_cast<IdxType>(-1);
+    struct Node {
+      IdxType left{no_idx};
+      IdxType right{no_idx};
+      IdxType parent{no_idx};
+
+      T data;
+      template <typename... Args>
+      Node(Args&&... args) : data(std::forward<Args>(args)...) {
+      }
+
+      template <typename... Args>
+      Node(IdxType p, Args&&... args) : parent(p), data(std::forward<Args>(args)...) {
+      }
+    };
+
+    std::vector<Node> storage;
+
+    BTreeVector() {
+      storage.reserve(NS);
+    }
+
+    template <typename... Args>
+    BTreeVector(Args&&... args) {
+      storage.reserve(NS);
+      storage.emplace_back(std::forward<Args>(args)...);
+    }
+
+    struct NodeHandle {
+      IdxType idx;
+      std::vector<typename BTreeVector<T>::Node>* storage_ptr;
+
+      NodeHandle(IdxType i, std::vector<typename BTreeVector<T>::Node>* ptr) : idx{i}, storage_ptr{ptr} {
+      }
+
+      bool has_left() const {
+        return storage_ptr->operator[](idx).left != BTreeVector<T>::no_idx;
+      }
+
+      bool has_right() const {
+        return storage_ptr->operator[](idx).right != BTreeVector<T>::no_idx;
+      }
+      NodeHandle left() const {
+        return NodeHandle{storage_ptr->operator[](idx).left, storage_ptr};
+      }
+
+      NodeHandle right() const {
+        return NodeHandle{storage_ptr->operator[](idx).right, storage_ptr};
+      }
+
+      template <typename... Args>
+      IdxType add_left(Args&&... args) {
+        if (has_left()) {
+          left().node().data = T(std::forward<Args>(args)...);
+        } else {
+          storage_ptr->emplace_back(idx, std::forward<Args>(args)...);
+          node().left = storage_ptr->size() - 1;
+        }
+
+        return node().left;
+      }
+
+      template <typename... Args>
+      IdxType add_right(Args&&... args) {
+        if (has_right()) {
+          right().node().data = T(std::forward<Args>(args)...);
+        } else {
+          storage_ptr->emplace_back(idx, std::forward<Args>(args)...);
+          node().right = storage_ptr->size() - 1;
+        }
+
+        return node().right;
+      }
+
+      typename BTreeVector<T>::Node& node() {
+        return storage_ptr->operator[](idx);
+      }
+      typename BTreeVector<T>::Node& node() const {
+        return storage_ptr->operator[](idx);
+      }
+
+      void print_tree(const std::string& prefix = "", bool is_left = true) const {
+        if (this->has_right()) {
+          right().print_tree(prefix + (is_left ? "│   " : "    "), false);
+        }
+
+        std::cout << prefix << (is_left ? "└── " : "┌── ") << storage_ptr->operator[](idx).data << "\n";
+
+        if (this->has_left()) {
+          left().print_tree(prefix + (is_left ? "    " : "│   "), true);
+        }
+      }
+
+    protected:
+      // be careful, no access control
+      typename BTreeVector<T>::Node& node(IdxType idx) {
+        return storage_ptr->operator[](idx);
+      }
+    };
+  };
+
+} // namespace flib
+
+struct MADnode {
+  using IdxType = flib::IdxType;
+  int num_points;
+  bool matched;
+  Eigen::Vector3d mean;
+  Eigen::Vector3d bbox;
+  Eigen::Matrix3d eigenvectors;
+};
+
 using ContainerType    = std::vector<Eigen::Vector3d>;
 using ContainerTypePtr = ContainerType*;
 using IteratorType     = typename ContainerType::iterator;
-using LeafList         = std::vector<MADtree*>;
+using LeafList         = std::vector<MADnode*>;
 
-struct MADtree {
-  MADtree(const ContainerTypePtr vec,
-          const IteratorType begin,
-          const IteratorType end,
-          const double b_max,
-          const double b_min,
-          const int level,
-          const int max_parallel_level,
-          MADtree* parent,
-          MADtree* plane_predecessor);
+struct MADtreeV : flib::BTreeVector<MADnode> {
+  using IdxType  = flib::IdxType;
+  using BaseType = flib::BTreeVector<MADnode>;
 
-  inline ~MADtree() {
-    if (left_)
-      delete left_;
-    if (right_)
-      delete right_;
-  }
+  struct MADNodeHandle : BaseType::NodeHandle {
+    using BaseType::NodeHandle::NodeHandle;
+    void build(const ContainerTypePtr vec,
+               const IteratorType begin,
+               const IteratorType end,
+               const double b_max,
+               const double b_min,
+               const int level,
+               const int max_parallel_level,
+               IdxType parent            = no_idx,
+               IdxType plane_predecessor = no_idx);
 
-  MADtree(const MADtree& other) = delete;
-  bool operator==(const MADtree& other) const;
+    void apply_transform(const Eigen::Matrix3d& r, const Eigen::Vector3d& t);
 
-  void applyTransform(const Eigen::Matrix3d& r, const Eigen::Vector3d& t);
+    const MADnode best_matching_leaf_fast(const Eigen::Vector3d& query) const;
 
-  const MADtree* bestMatchingLeafFast(const Eigen::Vector3d& query) const;
+    void get_leaves(std::back_insert_iterator<LeafList> it);
+  };
 
-  void build(const ContainerTypePtr vec,
-             const IteratorType begin,
-             const IteratorType end,
-             const double b_max,
-             const double b_min,
-             const int level,
-             const int max_parallel_level,
-             MADtree* parent,
-             MADtree* plane_predecessor);
-
-  static MADtree* makeSubtree(const ContainerTypePtr vec,
-                              const IteratorType begin,
-                              const IteratorType end,
-                              const double b_max,
-                              const double b_min,
-                              const int level,
-                              const int max_parallel_level,
-                              MADtree* parent,
-                              MADtree* plane_predecessor);
-
-  void getLeafs(std::back_insert_iterator<std::vector<MADtree*>> it);
-
-  int num_points_;
-  bool matched_;
-  MADtree* left_   = nullptr;
-  MADtree* right_  = nullptr;
-  MADtree* parent_ = nullptr;
-  Eigen::Vector3d mean_;
-  Eigen::Vector3d bbox_;
-  Eigen::Matrix3d eigenvectors_;
-
-  MADtree() {}; // make this public to serialize/deserialize
-
-protected:
+  // returns handle to root
+  MADNodeHandle build(const ContainerTypePtr vec,
+                      const IteratorType begin,
+                      const IteratorType end,
+                      const double b_max,
+                      const double b_min,
+                      const int max_parallel_level);
 };
+
+// TODOs
+// 1- Async construction
+// 2- The node handle should have a pointer to the Tree and not the storage. So I can precompute
+// the leaves and save them somewhere (perhaps madtree has a std::vector of leaves)
+// 3- fix the weird interface of nodehandles perhaps with CRTP so that left() returns the correct
+// inherited type. this is ugly: MADNodeHandle{nh.node().left, storage_ptr}
+
+inline std::ostream& operator<<(std::ostream& os, const MADnode& p) {
+  os << p.mean.transpose();
+  return os;
+}

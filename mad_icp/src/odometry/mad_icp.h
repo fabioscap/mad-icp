@@ -38,11 +38,13 @@
 #include <omp.h>
 #include <sstream>
 
-class MADicp {
+class MADicpV {
+  using MADNodeHandle = MADtreeV::MADNodeHandle;
+
 public:
   using JacobianMatrixType = Eigen::Matrix<double, 1, 6>;
 
-  MADicp(double min_ball, double rho_ker, double b_ratio, int num_threads);
+  MADicpV(double min_ball, double rho_ker, double b_ratio, int num_threads);
 
   void resetAdders();
 
@@ -52,14 +54,14 @@ public:
 
   void oneRound();
 
-  void update(const MADtree* fixed_tree);
+  void update(const MADNodeHandle& fixed_tree);
 
   void updateState();
 
   void errorAndJacobian(double& e,
                         JacobianMatrixType& J,
-                        const MADtree& fixed,
-                        const MADtree& moving,
+                        const MADnode& fixed,
+                        const MADnode& moving,
                         const Eigen::Vector3d& moving_transformed) const;
 
   Eigen::Isometry3d X_;

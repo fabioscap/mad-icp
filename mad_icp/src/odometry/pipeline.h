@@ -74,7 +74,7 @@ protected:
   void initialize(const double& curr_stamp, const ContainerTypePtr curr_cloud);
   void deskew(const ContainerTypePtr& curr_cloud, const Eigen::Isometry3d& T_prev, const Eigen::Isometry3d& T_now);
 
-  MADicp icp_;
+  MADicpV icp_;
   VelEstimator vel_estimator_;
 
   Eigen::Isometry3d frame_to_map_;
@@ -86,7 +86,7 @@ protected:
   std::deque<Frame*> frames_;
   std::vector<Eigen::Isometry3d> trajectory_;
 
-  MADtree* current_tree_;
+  MADtreeV* current_tree_;
   LeafList model_leaves_, current_leaves_;
 
   // start some params
