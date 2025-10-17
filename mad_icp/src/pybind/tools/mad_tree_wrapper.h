@@ -40,7 +40,7 @@ public:
   }
 
   std::pair<Eigen::Vector3d, Eigen::Vector3d> search(const Eigen::Vector3d& query) {
-    auto root                = MADtreeV::MADNodeHandle{0, &mad_tree_->storage};
+    auto root                = MADtreeV::MADNodeHandle{0, mad_tree_->storage};
     const MADnode match_leaf = root.best_matching_leaf_fast(query);
     // this is the median point and normal calculated with PCA
     return std::make_pair(match_leaf.mean, match_leaf.eigenvectors.col(0));
@@ -50,7 +50,7 @@ public:
     std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> matches(query_cloud.size());
     int idx = 0;
     for (const auto& query : query_cloud) {
-      auto root                = MADtreeV::MADNodeHandle{0, &mad_tree_->storage};
+      auto root                = MADtreeV::MADNodeHandle{0, mad_tree_->storage};
       const MADnode match_leaf = root.best_matching_leaf_fast(query);
       matches[idx++]           = std::make_pair(match_leaf.mean, match_leaf.eigenvectors.col(0));
     }
@@ -61,7 +61,7 @@ public:
     std::vector<std::tuple<Eigen::Vector3d, Eigen::Vector3d, double>> matches(query_cloud.size());
     int idx = 0;
     for (const auto& query : query_cloud) {
-      auto root                = MADtreeV::MADNodeHandle{0, &mad_tree_->storage};
+      auto root                = MADtreeV::MADNodeHandle{0, mad_tree_->storage};
       const MADnode match_leaf = root.best_matching_leaf_fast(query);
       const double dist        = (query - match_leaf.mean).norm();
       matches[idx++]           = std::make_tuple(match_leaf.mean, match_leaf.eigenvectors.col(0), dist);

@@ -77,8 +77,7 @@ public:
         }
       }
       mad_icp_->resetAdders();
-      auto root = MADtreeV::MADNodeHandle{0, &ref_tree_->storage};
-      mad_icp_->update(root);
+      mad_icp_->update(ref_tree_->root());
       mad_icp_->updateState();
     }
 

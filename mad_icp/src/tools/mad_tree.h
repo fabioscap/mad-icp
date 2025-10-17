@@ -11,10 +11,6 @@
 namespace flib {
   using IdxType = size_t;
 
-  // wrap nodes storing also the address of the storage. We don't want this
-  // information in the nodes because if we serialize the tree then all of the
-  // pointers become invalid
-
   template <typename T, size_t NS = 1024>
   struct BTreeVector {
     static constexpr IdxType no_idx = static_cast<IdxType>(-1);
@@ -45,57 +41,61 @@ namespace flib {
       storage.emplace_back(std::forward<Args>(args)...);
     }
 
+    // wrap nodes storing also the address of the storage. We don't want this
+    // information in the nodes because if we serialize the tree then all of the
+    // pointers become invalid
+    template <typename Derived>
     struct NodeHandle {
       IdxType idx;
-      std::vector<typename BTreeVector<T>::Node>* storage_ptr;
+      std::vector<typename BTreeVector<T>::Node>& storage;
 
-      NodeHandle(IdxType i, std::vector<typename BTreeVector<T>::Node>* ptr) : idx{i}, storage_ptr{ptr} {
+      NodeHandle(IdxType i, std::vector<typename BTreeVector<T>::Node>& str) : idx{i}, storage{str} {
       }
 
       bool has_left() const {
-        return storage_ptr->operator[](idx).left != BTreeVector<T>::no_idx;
+        return storage[idx].left != BTreeVector<T>::no_idx;
       }
 
       bool has_right() const {
-        return storage_ptr->operator[](idx).right != BTreeVector<T>::no_idx;
+        return storage[idx].right != BTreeVector<T>::no_idx;
       }
-      NodeHandle left() const {
-        return NodeHandle{storage_ptr->operator[](idx).left, storage_ptr};
+      Derived left() const {
+        return Derived{storage[idx].left, storage};
       }
 
-      NodeHandle right() const {
-        return NodeHandle{storage_ptr->operator[](idx).right, storage_ptr};
+      Derived right() const {
+        return Derived{storage[idx].right, storage};
       }
 
       template <typename... Args>
-      IdxType add_left(Args&&... args) {
+      Derived add_left(Args&&... args) {
         if (has_left()) {
           left().node().data = T(std::forward<Args>(args)...);
         } else {
-          storage_ptr->emplace_back(idx, std::forward<Args>(args)...);
-          node().left = storage_ptr->size() - 1;
+          storage.emplace_back(idx, std::forward<Args>(args)...);
+          node().left = storage.size() - 1;
         }
 
-        return node().left;
+        return Derived{node().left, storage};
       }
 
       template <typename... Args>
-      IdxType add_right(Args&&... args) {
+      Derived add_right(Args&&... args) {
         if (has_right()) {
           right().node().data = T(std::forward<Args>(args)...);
         } else {
-          storage_ptr->emplace_back(idx, std::forward<Args>(args)...);
-          node().right = storage_ptr->size() - 1;
+          storage.emplace_back(idx, std::forward<Args>(args)...);
+          node().right = storage.size() - 1;
         }
 
-        return node().right;
+        return Derived{node().right, storage};
       }
 
       typename BTreeVector<T>::Node& node() {
-        return storage_ptr->operator[](idx);
+        return storage[idx];
       }
       typename BTreeVector<T>::Node& node() const {
-        return storage_ptr->operator[](idx);
+        return storage[idx];
       }
 
       void print_tree(const std::string& prefix = "", bool is_left = true) const {
@@ -103,7 +103,7 @@ namespace flib {
           right().print_tree(prefix + (is_left ? "│   " : "    "), false);
         }
 
-        std::cout << prefix << (is_left ? "└── " : "┌── ") << storage_ptr->operator[](idx).data << "\n";
+        std::cout << prefix << (is_left ? "└── " : "┌── ") << storage[idx].data << "\n";
 
         if (this->has_left()) {
           left().print_tree(prefix + (is_left ? "    " : "│   "), true);
@@ -113,7 +113,7 @@ namespace flib {
     protected:
       // be careful, no access control
       typename BTreeVector<T>::Node& node(IdxType idx) {
-        return storage_ptr->operator[](idx);
+        return storage[idx];
       }
     };
   };
@@ -138,8 +138,8 @@ struct MADtreeV : flib::BTreeVector<MADnode> {
   using IdxType  = flib::IdxType;
   using BaseType = flib::BTreeVector<MADnode>;
 
-  struct MADNodeHandle : BaseType::NodeHandle {
-    using BaseType::NodeHandle::NodeHandle;
+  struct MADNodeHandle : BaseType::NodeHandle<MADNodeHandle> {
+    using BaseType::NodeHandle<MADNodeHandle>::NodeHandle;
     void build(const ContainerTypePtr vec,
                const IteratorType begin,
                const IteratorType end,
@@ -164,14 +164,16 @@ struct MADtreeV : flib::BTreeVector<MADnode> {
                       const double b_max,
                       const double b_min,
                       const int max_parallel_level);
+
+  auto root() {
+    return MADNodeHandle{0, storage};
+  }
 };
 
 // TODOs
-// 1- Async construction
+// 1- Async construction (probably hard due to many threads that can write in the same memory)
 // 2- The node handle should have a pointer to the Tree and not the storage. So I can precompute
 // the leaves and save them somewhere (perhaps madtree has a std::vector of leaves)
-// 3- fix the weird interface of nodehandles perhaps with CRTP so that left() returns the correct
-// inherited type. this is ugly: MADNodeHandle{nh.node().left, storage_ptr}
 
 inline std::ostream& operator<<(std::ostream& os, const MADnode& p) {
   os << p.mean.transpose();

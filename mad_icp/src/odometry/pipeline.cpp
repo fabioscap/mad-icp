@@ -183,8 +183,7 @@ void Pipeline::compute(const double& curr_stamp, ContainerType curr_cloud_mem) {
 
 #pragma omp parallel for
     for (Frame* frame : keyframes_) {
-      auto root = MADtreeV::MADNodeHandle{0, &frame->tree_->storage};
-      icp_.update(root);
+      icp_.update(frame->tree_->root());
     }
 
 #pragma omp barrier
