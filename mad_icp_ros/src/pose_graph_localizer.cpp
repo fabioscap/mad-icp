@@ -224,31 +224,15 @@ void PoseGraphLocalizer::logStartupConfiguration() {
   RCLCPP_INFO(get_logger(), "  trajectory_buffer_size: %zu", trajectory_buffer_size_);
 
   // Topics
-  const auto cloud_topic = this->resolve_topic_or_service_name("cloud_in", false);
-  const auto initialpose_topic =
-      this->resolve_topic_or_service_name("initialpose", false);
-  const auto wheel_odom_topic =
-      this->resolve_topic_or_service_name("wheel_odom", false);
-  const auto odom_topic = this->resolve_topic_or_service_name("odom", false);
-  const auto pose_topic = this->resolve_topic_or_service_name("pose", false);
-
   RCLCPP_INFO(get_logger(), "Topics:");
-  RCLCPP_INFO(get_logger(), "  subscribe cloud_in: %s", cloud_topic.c_str());
-  RCLCPP_INFO(get_logger(), "  subscribe initialpose: %s",
-              initialpose_topic.c_str());
-  RCLCPP_INFO(get_logger(), "  subscribe wheel_odom (optional): %s",
-              wheel_odom_topic.c_str());
-  RCLCPP_INFO(get_logger(), "  publish odom: %s", odom_topic.c_str());
-  RCLCPP_INFO(get_logger(), "  publish pose: %s", pose_topic.c_str());
+  RCLCPP_INFO(get_logger(), "  subscribe cloud_in");
+  RCLCPP_INFO(get_logger(), "  subscribe initialpose");
+  RCLCPP_INFO(get_logger(), "  subscribe wheel_odom (optional)");
+  RCLCPP_INFO(get_logger(), "  publish odom");
+  RCLCPP_INFO(get_logger(), "  publish pose");
   if (publish_debug_clouds_) {
-    const auto local_map_topic =
-        this->resolve_topic_or_service_name("local_map", false);
-    const auto current_cloud_topic =
-        this->resolve_topic_or_service_name("current_cloud", false);
-    RCLCPP_INFO(get_logger(), "  publish local_map (debug): %s",
-                local_map_topic.c_str());
-    RCLCPP_INFO(get_logger(), "  publish current_cloud (debug): %s",
-                current_cloud_topic.c_str());
+    RCLCPP_INFO(get_logger(), "  publish local_map (debug)");
+    RCLCPP_INFO(get_logger(), "  publish current_cloud (debug)");
   }
 
   // TF usage
