@@ -59,6 +59,7 @@ class Localizer : public rclcpp::Node {
   float loop_time_;
 
   std::string base_frame_{"base_link"};
+  std::string map_frame_{"map"};
 
   bool publish_tf_{false};
   bool publish_pose_{false};

@@ -247,7 +247,7 @@ void mad_icp_ros::Odometry::pointcloud_callback(
     const auto base_id = base_frame_.c_str();
 
     try {
-      t = tf_buffer_->lookupTransform(child_id, base_id, msg->header.stamp);
+      t = tf_buffer_->lookupTransform(base_id, child_id, msg->header.stamp);
       bTl = tf2::transformToEigen(t);
     } catch (const tf2::TransformException &ex) {
       RCLCPP_WARN(get_logger(), "Could not transform %s to %s: %s", child_id,
@@ -389,10 +389,14 @@ void mad_icp_ros::Odometry::publish_odom_tf(const Eigen::Isometry3d &pose,
   return;
 }
 
+namespace {
+
 Eigen::Matrix4d parse_isometry(std::vector<double> mat_vec) {
   return Eigen::Map<Eigen::Matrix<double, 4, 4, Eigen::RowMajor>>(
       mat_vec.data());
 }
+
+}  // namespace
 
 void mad_icp_ros::Odometry::init_params() {
   min_range_ = this->declare_parameter("min_range", 0.0);

@@ -94,10 +94,14 @@ void Localizer::reset() {
   velocity_estimator_ = std::make_shared<VelEstimator>(sensor_hz_);
 }
 
+namespace {
+
 Eigen::Matrix4d parse_isometry(std::vector<double> mat_vec) {
   return Eigen::Map<Eigen::Matrix<double, 4, 4, Eigen::RowMajor>>(
       mat_vec.data());
 }
+
+}  // namespace
 
 void Localizer::init_params() {
   min_range_ = this->declare_parameter("min_range", 0.0);
@@ -121,6 +125,7 @@ void Localizer::init_params() {
       std::vector<double>{1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
                           0.0, 0.0, 0.0, 0.0, 1.0}));
   base_frame_ = this->declare_parameter("base_frame", "base_link");
+  map_frame_ = this->declare_parameter("map_frame", "map");
   use_tf_for_extrinsics_ =
       this->declare_parameter("use_tf_for_extrinsics", false);
 
@@ -204,7 +209,7 @@ void Localizer::update_extrinsics(
     const auto child_id = msg->header.frame_id.c_str();
     const auto base_id = base_frame_.c_str();
     try {
-      t = tf_buffer_->lookupTransform(child_id, base_id, msg->header.stamp);
+      t = tf_buffer_->lookupTransform(base_id, child_id, msg->header.stamp);
       lidar_in_base_ = tf2::transformToEigen(t);
     } catch (const tf2::TransformException &ex) {
       RCLCPP_WARN(get_logger(), "Could not transform %s to %s: %s", child_id,
@@ -234,7 +239,7 @@ void Localizer::publish_state(const Eigen::Isometry3d &pose,
   if (publish_pose_) {
     geometry_msgs::msg::PoseWithCovarianceStamped pose_stamped;
     pose_stamped.header.stamp = time;
-    pose_stamped.header.frame_id = base_frame_;
+    pose_stamped.header.frame_id = map_frame_;
     pose_stamped.pose = pose_msg;
 
     pose_pub_->publish(pose_stamped);
@@ -242,7 +247,7 @@ void Localizer::publish_state(const Eigen::Isometry3d &pose,
   if (publish_odom_) {
     nav_msgs::msg::Odometry odom_msg;
     odom_msg.header.stamp = time;
-    odom_msg.header.frame_id = "map";
+    odom_msg.header.frame_id = map_frame_;
     odom_msg.child_frame_id = base_frame_;
     odom_msg.pose = pose_msg;
     odom_pub_->publish(odom_msg);
@@ -250,7 +255,7 @@ void Localizer::publish_state(const Eigen::Isometry3d &pose,
   if (publish_tf_) {
     geometry_msgs::msg::TransformStamped tf_msg;
     tf_msg.header.stamp = time;
-    tf_msg.header.frame_id = "map";
+    tf_msg.header.frame_id = map_frame_;
     tf_msg.child_frame_id = base_frame_;
     tf_msg.transform.translation.x = pose_msg.pose.position.x;
     tf_msg.transform.translation.y = pose_msg.pose.position.y;
@@ -305,14 +310,18 @@ void Localizer::callback_cloud_in(
     icp_->resetAdders();
     icp_->update(map_->tree_);
     icp_->updateState();
+    RCLCPP_DEBUG(get_logger(), "[It=%lu] Chi = %lf", it, icp_->chi_adder_);
+
+    if (abs(last_chi - icp_->chi_adder_) < delta_chi_threshold_) {
+      break;
+    }
     last_chi = icp_->chi_adder_;
-    RCLCPP_DEBUG(get_logger(), "[It=%lu] Chi = %lf", it, last_chi);
   }
 
   frame_to_map_ = icp_->X_;
   int matched_leaves = 0;
   for (auto *l : current_leaves) {
-    matched_leaves += 1 ? l->matched_ : 0;
+    matched_leaves += l->matched_ ? 1 : 0;
   }
   this->update_trajectory(frame_to_map_);
   this->publish_state(frame_to_map_, msg->header.stamp);
@@ -413,7 +422,7 @@ void Localizer::publish_map_kdtree() {
     marker.type = 0;
     marker.id = marker_id;
     marker_id += 1;
-    marker.header.frame_id = "map";
+    marker.header.frame_id = map_frame_;
     marker.ns = "/kdtree";
     marker.lifetime.nanosec = 0;
     marker.lifetime.sec = 0;
