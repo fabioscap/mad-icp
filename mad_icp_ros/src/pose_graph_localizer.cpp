@@ -55,6 +55,7 @@ PoseGraphLocalizer::PoseGraphLocalizer(const rclcpp::NodeOptions& options)
   initPublishers();
   initSubscribers();
   loadMap();
+  logStartupConfiguration();
 }
 
 PoseGraphLocalizer::~PoseGraphLocalizer() = default;
@@ -187,6 +188,75 @@ void PoseGraphLocalizer::loadMap() {
 
   RCLCPP_INFO(get_logger(), "Map loaded successfully with %zu poses", pose_index_.size());
   state_ = State::WAITING_INITIALPOSE;
+}
+
+void PoseGraphLocalizer::logStartupConfiguration() const {
+  RCLCPP_INFO(get_logger(), "================ PoseGraphLocalizer configuration ================");
+
+  // Parameters
+  RCLCPP_INFO(get_logger(), "Parameters:");
+  RCLCPP_INFO(get_logger(), "  map_dir: %s", map_dir_.c_str());
+  RCLCPP_INFO(get_logger(), "  num_nearest_keyframes: %zu", num_nearest_keyframes_);
+  RCLCPP_INFO(get_logger(), "  keyframe_update_rate: %.3f", keyframe_update_rate_);
+  RCLCPP_INFO(get_logger(), "  sensor_hz: %.3f", sensor_hz_);
+  RCLCPP_INFO(get_logger(), "  min_range: %.3f", min_range_);
+  RCLCPP_INFO(get_logger(), "  max_range: %.3f", max_range_);
+  RCLCPP_INFO(get_logger(), "  b_max: %.6f", b_max_);
+  RCLCPP_INFO(get_logger(), "  b_min: %.6f", b_min_);
+  RCLCPP_INFO(get_logger(), "  b_ratio: %.6f", b_ratio_);
+  RCLCPP_INFO(get_logger(), "  rho_ker: %.6f", rho_ker_);
+  RCLCPP_INFO(get_logger(), "  max_icp_its: %zu", max_icp_its_);
+  RCLCPP_INFO(get_logger(), "  delta_chi_threshold: %.9f", delta_chi_threshold_);
+  RCLCPP_INFO(get_logger(), "  num_threads: %d", num_threads_);
+  RCLCPP_INFO(get_logger(), "  max_parallel_levels: %d", max_parallel_levels_);
+  RCLCPP_INFO(get_logger(), "  base_frame: %s", base_frame_.c_str());
+  RCLCPP_INFO(get_logger(), "  odom_frame: %s", odom_frame_.c_str());
+  RCLCPP_INFO(get_logger(), "  map_frame: %s", map_frame_.c_str());
+  RCLCPP_INFO(get_logger(), "  use_tf_for_extrinsics: %s",
+              use_tf_for_extrinsics_ ? "true" : "false");
+  RCLCPP_INFO(get_logger(), "  publish_tf: %s", publish_tf_ ? "true" : "false");
+  RCLCPP_INFO(get_logger(), "  publish_odom: %s", publish_odom_ ? "true" : "false");
+  RCLCPP_INFO(get_logger(), "  publish_pose: %s", publish_pose_ ? "true" : "false");
+  RCLCPP_INFO(get_logger(), "  publish_odom_base_identity: %s",
+              publish_odom_base_identity_ ? "true" : "false");
+  RCLCPP_INFO(get_logger(), "  publish_debug_clouds: %s",
+              publish_debug_clouds_ ? "true" : "false");
+  RCLCPP_INFO(get_logger(), "  trajectory_buffer_size: %zu", trajectory_buffer_size_);
+
+  // Topics
+  RCLCPP_INFO(get_logger(), "Topics:");
+  RCLCPP_INFO(get_logger(), "  subscribe cloud_in");
+  RCLCPP_INFO(get_logger(), "  subscribe initialpose");
+  RCLCPP_INFO(get_logger(), "  subscribe wheel_odom (optional)");
+  RCLCPP_INFO(get_logger(), "  publish odom");
+  RCLCPP_INFO(get_logger(), "  publish pose");
+  if (publish_debug_clouds_) {
+    RCLCPP_INFO(get_logger(), "  publish local_map (debug)");
+    RCLCPP_INFO(get_logger(), "  publish current_cloud (debug)");
+  }
+
+  // TF usage
+  RCLCPP_INFO(get_logger(), "TF:");
+  if (publish_tf_) {
+    RCLCPP_INFO(get_logger(), "  publish %s -> %s", map_frame_.c_str(),
+                odom_frame_.c_str());
+    if (publish_odom_base_identity_) {
+      RCLCPP_INFO(get_logger(), "  publish %s -> %s (identity if no wheel odom)",
+                  odom_frame_.c_str(), base_frame_.c_str());
+    }
+  } else {
+    RCLCPP_INFO(get_logger(), "  TF publishing disabled");
+  }
+
+  if (use_tf_for_extrinsics_) {
+    RCLCPP_INFO(get_logger(),
+                "  lookup sensor_frame -> %s for lidar extrinsics (per cloud)",
+                base_frame_.c_str());
+  } else {
+    RCLCPP_INFO(get_logger(), "  use static lidar_in_base parameter for extrinsics");
+  }
+
+  RCLCPP_INFO(get_logger(), "=================================================================");
 }
 
 void PoseGraphLocalizer::cloudCallback(
