@@ -190,7 +190,7 @@ void PoseGraphLocalizer::loadMap() {
   state_ = State::WAITING_INITIALPOSE;
 }
 
-void PoseGraphLocalizer::logStartupConfiguration() const {
+void PoseGraphLocalizer::logStartupConfiguration() {
   RCLCPP_INFO(get_logger(), "================ PoseGraphLocalizer configuration ================");
 
   // Parameters

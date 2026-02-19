@@ -77,7 +77,7 @@ class PoseGraphLocalizer : public rclcpp::Node {
   void initSubscribers();
   void initPublishers();
   void loadMap();
-  void logStartupConfiguration() const;
+  void logStartupConfiguration();
 
   // Callbacks
   void cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
