@@ -132,7 +132,9 @@ class PoseGraphLocalizer : public rclcpp::Node {
   Eigen::Isometry3d map_T_base_;   // Current localized pose (map to base_link)
   Eigen::Isometry3d map_T_odom_;   // Correction transform (map to odom)
   Eigen::Isometry3d odom_T_base_;  // Latest wheel odom (odom to base_link)
+  Eigen::Isometry3d prev_odom_T_base_;  // Previous wheel odom for delta computation
   bool have_wheel_odom_{false};
+  bool have_prev_wheel_odom_{false};
 
   // Map data
   PoseIndex pose_index_;

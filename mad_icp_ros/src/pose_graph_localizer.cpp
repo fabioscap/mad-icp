@@ -102,6 +102,7 @@ void PoseGraphLocalizer::initParams() {
   map_T_base_.setIdentity();
   map_T_odom_.setIdentity();
   odom_T_base_.setIdentity();
+  prev_odom_T_base_.setIdentity();
 }
 
 void PoseGraphLocalizer::initSubscribers() {
@@ -300,17 +301,24 @@ void PoseGraphLocalizer::cloudCallback(
   LeafList current_leaves;
   current_tree->getLeafs(std::back_insert_iterator<LeafList>(current_leaves));
 
-  // Compute motion prediction from velocity
-  estimateVelocity();
-  Vector6d dx = velocity_current_ / sensor_hz_;
+  // Compute motion prediction
   Eigen::Isometry3d dX;
   dX.setIdentity();
-  dX.linear() = expMapSO3(dx.tail(3));
-  dX.translation() = dx.head(3);
 
-  // Initial guess: previous pose + predicted motion (in lidar frame)
-  Eigen::Isometry3d map_T_lidar_prev = map_T_base_ * lidar_in_base_;
-  Eigen::Isometry3d initial_guess = map_T_lidar_prev * dX;
+  if (have_prev_wheel_odom_) {
+    // Use wheel odom delta (instantaneous, no lag)
+    dX = prev_odom_T_base_.inverse() * odom_T_base_;
+  } else {
+    // Fall back to velocity estimator
+    estimateVelocity();
+    Vector6d dx = velocity_current_ / sensor_hz_;
+    dX.linear() = expMapSO3(dx.tail(3));
+    dX.translation() = dx.head(3);
+  }
+
+  // Apply dX in base frame, then convert to lidar frame
+  Eigen::Isometry3d map_T_base_predicted = map_T_base_ * dX;
+  Eigen::Isometry3d initial_guess = map_T_base_predicted * lidar_in_base_;
 
   // Setup ICP
   icp_->setMoving(current_leaves);
@@ -399,6 +407,12 @@ void PoseGraphLocalizer::initialPoseCallback(
 }
 
 void PoseGraphLocalizer::wheelOdomCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
+  // Save previous before overwriting
+  if (have_wheel_odom_) {
+    prev_odom_T_base_ = odom_T_base_;
+    have_prev_wheel_odom_ = true;
+  }
+
   // Extract odom→base transform
   Eigen::Vector3d t(msg->pose.pose.position.x, msg->pose.pose.position.y,
                     msg->pose.pose.position.z);
