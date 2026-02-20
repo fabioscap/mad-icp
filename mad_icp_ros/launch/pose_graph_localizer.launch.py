@@ -92,6 +92,9 @@ def generate_launch_description():
             ("/cloud_in", cloud_topic),
             ("/initialpose", initialpose_topic),
             ("/wheel_odom", wheel_odom_topic),
+            # TF topics
+            ("/tf", "/j100_0819/tf"),
+            ("/tf_static", "/j100_0819/tf_static"),
             # Output topics
             ("/odom", odom_topic),
             ("/pose", pose_topic),
