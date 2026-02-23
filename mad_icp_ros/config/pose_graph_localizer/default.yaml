@@ -4,7 +4,7 @@ pose_graph_localizer:
     map_dir: ""
 
     # Keyframe management
-    num_nearest_keyframes: 4 # Number of nearest keyframes to use for ICP
+    num_nearest_keyframes: 1 # Number of nearest keyframes to use for ICP
     keyframe_update_rate: 1.0 # [Hz] Rate to check for new nearest keyframes
 
     # MAD-ICP parameters
@@ -12,9 +12,9 @@ pose_graph_localizer:
     b_min: 0.1 # [m] Normal propagation threshold
     b_ratio: 0.02 # Search radius increase factor for data association
     rho_ker: 0.1 # [m] Huber kernel threshold
-    max_icp_its: 15 # Maximum ICP iterations per scan
+    max_icp_its: 10 # Maximum ICP iterations per scan
     delta_chi_threshold: 1e-6 # ICP convergence threshold
-    num_threads: 4 # Number of parallel threads
+    num_threads: 1 # Number of parallel threads
 
     # Sensor parameters
     min_range: 0.5 # [m] Filter points closer than this
