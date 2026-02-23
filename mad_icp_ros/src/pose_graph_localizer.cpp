@@ -361,7 +361,7 @@ void PoseGraphLocalizer::cloudCallback(
 
   // Publish localization result
   // publishState(map_T_base_, msg->header.stamp);
-  publishState(map_T_base_, ros::Time::now());
+  publishState(map_T_base_, now());
 
   // Publish debug clouds if enabled
   if (publish_debug_clouds_) {
