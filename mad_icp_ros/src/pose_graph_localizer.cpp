@@ -360,7 +360,8 @@ void PoseGraphLocalizer::cloudCallback(
   updateTrajectory(map_T_base_);
 
   // Publish localization result
-  publishState(map_T_base_, msg->header.stamp);
+  // publishState(map_T_base_, msg->header.stamp);
+  publishState(map_T_base_, ros::Time::now());
 
   // Publish debug clouds if enabled
   if (publish_debug_clouds_) {
