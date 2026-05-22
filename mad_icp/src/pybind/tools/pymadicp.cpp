@@ -29,6 +29,7 @@
 #include "mad_icp_wrapper.h"
 #include <pybind11/eigen.h>
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 #include <tools/constants.h>
 
 namespace py = pybind11;
@@ -42,6 +43,10 @@ PYBIND11_MODULE(pymadicp, m) {
          py::arg("reference"),
          py::arg("b_max") = 0.2,
          py::arg("b_min") = 0.1)
+    .def("setReferenceTrees",
+         &MADicpWrapper::setReferenceTrees,
+         py::arg("trees"),
+         py::arg("b_max") = 0.2)
     .def("compute",
          &MADicpWrapper::compute,
          py::arg("T"),

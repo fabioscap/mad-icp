@@ -209,6 +209,8 @@ Output structure:
                         help="Maximum point range filter in meters (default: 100.0)")
     parser.add_argument("-j", "--num-threads", type=int, default=4,
                         help="Number of parallel threads for tree building (default: 4)")
+    parser.add_argument("-k", "--max-poses", type=int, default=None,
+                        help="Stop after processing this many matched poses (default: all)")
 
     args = parser.parse_args()
 
@@ -304,6 +306,9 @@ Output structure:
 
             # Update description with stats
             progress.update(task, description=f"Building trees [dim](matched: {matched_count})[/dim]")
+
+            if args.max_poses is not None and matched_count >= args.max_poses:
+                break
 
     # Write manifest
     manifest_path = output / "manifest.txt"

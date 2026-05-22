@@ -36,3 +36,13 @@ target_link_libraries(pymadicp PRIVATE
 )
 
 install(TARGETS pymadicp DESTINATION .)
+
+# batch localizer (mirrors pipeline but against a pre-built map)
+pybind11_add_module(pylocalizer MODULE pylocalizer.cpp)
+target_link_libraries(pylocalizer PRIVATE
+    Eigen3::Eigen
+    odometry
+    tools
+)
+
+install(TARGETS pylocalizer DESTINATION .)

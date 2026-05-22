@@ -2,6 +2,7 @@ add_library(odometry STATIC
   vel_estimator.cpp
   pipeline.cpp
   mad_icp.cpp
+  localizer.cpp
 )
 
 target_link_libraries(odometry

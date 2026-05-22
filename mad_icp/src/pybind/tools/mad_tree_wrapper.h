@@ -32,6 +32,7 @@
 #include <tools/mad_tree.h>
 #include <fstream>
 #include <queue>
+#include <stdexcept>
 
 class MADtreeWrapper {
 public:
@@ -104,6 +105,55 @@ public:
 
   size_t getNumNodes() const {
     return mad_tree_ ? countNodes(mad_tree_.get()) : 0;
+  }
+
+  MADtree* getTree() const { return mad_tree_.get(); }
+
+  static MADtreeWrapper deserialize(const std::string& filepath) {
+    std::ifstream file(filepath, std::ios::binary);
+    if (!file)
+      throw std::runtime_error("Failed to open file: " + filepath);
+
+    char magic[4];
+    file.read(magic, 4);
+    if (magic[0] != 'M' || magic[1] != 'A' || magic[2] != 'D' || magic[3] != 'T')
+      throw std::runtime_error("Bad magic in: " + filepath);
+
+    uint32_t version, num_nodes, reserved;
+    file.read(reinterpret_cast<char*>(&version),   sizeof(version));
+    file.read(reinterpret_cast<char*>(&num_nodes), sizeof(num_nodes));
+    file.read(reinterpret_cast<char*>(&reserved),  sizeof(reserved));
+
+    MADtreeWrapper w;
+    if (num_nodes == 0) return w;
+
+    std::queue<std::pair<MADtree*, bool>> pending;
+
+    for (uint32_t i = 0; i < num_nodes; ++i) {
+      MADtree* node = new MADtree();
+      file.read(reinterpret_cast<char*>(node->mean_.data()),         3 * sizeof(double));
+      file.read(reinterpret_cast<char*>(node->bbox_.data()),         3 * sizeof(double));
+      file.read(reinterpret_cast<char*>(node->eigenvectors_.data()), 9 * sizeof(double));
+      int32_t np;
+      file.read(reinterpret_cast<char*>(&np), sizeof(np));
+      node->num_points_ = np;
+      uint8_t flags, pad;
+      file.read(reinterpret_cast<char*>(&flags), 1);
+      file.read(reinterpret_cast<char*>(&pad),   1);
+
+      if (i == 0) {
+        w.mad_tree_.reset(node);
+      } else {
+        auto [parent, is_left] = pending.front(); pending.pop();
+        if (is_left) parent->left_  = node;
+        else         parent->right_ = node;
+        node->parent_ = parent;
+      }
+
+      if (flags & 1) pending.push({node, true});
+      if (flags & 2) pending.push({node, false});
+    }
+    return w;
   }
 
 private:

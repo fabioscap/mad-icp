@@ -29,6 +29,7 @@
 #include "mad_tree_wrapper.h"
 #include <pybind11/eigen.h>
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 
 namespace py11 = pybind11;
 using namespace py11::literals;
@@ -47,5 +48,6 @@ PYBIND11_MODULE(pymadtree, m) {
                    .def("searchCloudDist", &MADtreeWrapper::searchCloudDist, py11::arg("query_cloud"))
                    .def("applyTransform", &MADtreeWrapper::applyTransform, py11::arg("R"), py11::arg("t"))
                    .def("serialize", &MADtreeWrapper::serialize, py11::arg("filepath"))
-                   .def("getNumNodes", &MADtreeWrapper::getNumNodes);
+                   .def("getNumNodes", &MADtreeWrapper::getNumNodes)
+                   .def_static("deserialize", &MADtreeWrapper::deserialize, py11::arg("filepath"));
 }

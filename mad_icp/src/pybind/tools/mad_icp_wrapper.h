@@ -29,6 +29,7 @@
 #pragma once
 #include <odometry/mad_icp.h>
 #include <sys/time.h>
+#include "mad_tree_wrapper.h"
 
 class MADicpWrapper {
 public:
@@ -48,8 +49,17 @@ public:
   void setReferenceCloud(ContainerType reference, const double b_max, const double b_min) {
     ref_cloud_ = std::move(reference);
     ref_b_max_ = b_max;
+    ref_trees_.clear();
     ref_tree_.reset(new MADtree(
       &ref_cloud_, ref_cloud_.begin(), ref_cloud_.end(), ref_b_max_, b_min, 0, max_parallel_levels_, nullptr, nullptr));
+  }
+
+  void setReferenceTrees(const std::vector<MADtreeWrapper*>& trees, const double b_max) {
+    ref_b_max_ = b_max;
+    ref_tree_.reset();
+    ref_trees_.clear();
+    for (MADtreeWrapper* tw : trees)
+      ref_trees_.push_back(tw->getTree());
   }
 
   inline Eigen::Matrix4d compute(const Eigen::Matrix4d& T,
@@ -77,7 +87,12 @@ public:
         }
       }
       mad_icp_->resetAdders();
-      mad_icp_->update(ref_tree_.get());
+      if (!ref_trees_.empty()) {
+        for (MADtree* tree : ref_trees_)
+          mad_icp_->update(tree);
+      } else {
+        mad_icp_->update(ref_tree_.get());
+      }
       mad_icp_->updateState();
     }
 
@@ -106,6 +121,7 @@ protected:
   std::unique_ptr<MADicp> mad_icp_     = nullptr;
   std::unique_ptr<MADtree> ref_tree_   = nullptr;
   std::unique_ptr<MADtree> query_tree_ = nullptr;
+  std::vector<MADtree*> ref_trees_;
   ContainerType query_cloud_;
   ContainerType ref_cloud_;
   LeafList query_leaves_;
